@@ -22,6 +22,14 @@ SOURCE_EXTS = [
     ".sh", ".bat", ".pl", ".php", ".rs", ".scala", ".kt", ".dart"
 ]
 
+CODE_NAMES = {
+    ".py": "python code", ".cpp": "cpp code", ".c": "c code", ".h": "c header",
+    ".java": "java code", ".cs": "csharp code", ".js": "js code", ".ts": "ts code",
+    ".go": "go code", ".rb": "ruby code", ".swift": "swift code", ".sh": "bash code",
+    ".bat": "batch file", ".pl": "perl code", ".php": "php code", ".rs": "rust code",
+    ".scala": "scala code", ".kt": "kotlin code", ".dart": "dart code"
+}
+
 BG_MAIN = "#232832"
 BG_SEC = "#2b3040"
 BG_ALT = "#262b36"
@@ -77,6 +85,12 @@ def detect_format(filepath):
     except Exception:
         pass
     return "txt"
+
+def get_pretty_format(filepath, fmt):
+    if fmt == "code":
+        ext = os.path.splitext(filepath)[-1].lower()
+        return CODE_NAMES.get(ext, f"{ext[1:]} code" if ext.startswith('.') else "code")
+    return fmt
 
 def read_data(filepath, ftype):
     if ftype == "code":
@@ -191,6 +205,7 @@ class DataConverterGUI:
         self.status = StringVar(value="Готов к работе.")
         self.df = None
         self.n_preview = IntVar(value=20)
+        self.pretty_format = ""
         self._build_gui()
 
     def _build_gui(self):
@@ -222,7 +237,7 @@ class DataConverterGUI:
         Label(self.master, textvariable=self.status, fg=TXT_ACCENT, font=label_font, anchor="w",
               padx=12, bg=BG_MAIN).pack(fill="x", pady=(0,7), padx=10)
 
-        # Предпросмотр
+        # Предпросмотр с подписью формата
         preview_frame = Frame(self.master, bg=BG_MAIN)
         preview_frame.pack(fill="both", expand=True, padx=18, pady=(0,8))
         preview_top = Frame(preview_frame, bg=BG_MAIN)
@@ -230,6 +245,8 @@ class DataConverterGUI:
         self.preview_label = Label(preview_top, text="Просмотр первых 20 строк:",
                                    bg=BG_MAIN, font=label_font, anchor="w", fg=TXT_ACCENT)
         self.preview_label.pack(side="left", pady=(3,2))
+        self.preview_format_label = Label(preview_top, text="", bg=BG_MAIN, fg="#b5e3ff", font=label_font)
+        self.preview_format_label.pack(side="left", padx=(7,0))
         Label(preview_top, text=" Кол-во строк:", bg=BG_MAIN, fg=TXT_ACCENT, font=label_font).pack(side="left")
         self.spin_preview = Spinbox(preview_top, from_=5, to=500, width=5, textvariable=self.n_preview,
                                     bg=BG_ALT, fg=TXT_MAIN, font=label_font, relief="raised", command=self.update_preview)
@@ -256,8 +273,10 @@ class DataConverterGUI:
             n = 20
             self.n_preview.set(n)
         fmt = self.in_format.get()
+        pretty_fmt = self.pretty_format
         label_str = f"Просмотр первых {n} строк:"
         self.preview_label.config(text=label_str)
+        self.preview_format_label.config(text=f" [{pretty_fmt}]" if pretty_fmt else "")
         try:
             if self.df is None:
                 return
@@ -284,10 +303,11 @@ class DataConverterGUI:
             return
         self.file_path = path
         fmt = detect_format(self.file_path)
+        pretty_fmt = get_pretty_format(self.file_path, fmt)
         self.in_format.set(fmt)
-        self.in_label.config(text=f"Исходный формат: {fmt.upper()}")
-        self.status.set(f"Выбран файл: {os.path.basename(path)} ({fmt})")
-        # Ограничить форматы назначения для исходных файлов только txt и md
+        self.pretty_format = pretty_fmt
+        self.in_label.config(text=f"Исходный формат: {pretty_fmt}")
+        self.status.set(f"Выбран файл: {os.path.basename(path)} ({pretty_fmt})")
         if fmt == "code":
             self.format_combo["values"] = ["txt", "md"]
         else:
@@ -323,7 +343,7 @@ class DataConverterGUI:
         try:
             if fmt == "code":
                 save_code(self.df, save_path)
-                self.status.set(f"Исходник сохранён как {save_path}")
+                self.status.set(f"{self.pretty_format.capitalize()} сохранён как {save_path}")
                 self.text.insert(END, f"\n\nСохранено в: {save_path}\n")
                 return
             if not isinstance(self.df, pd.DataFrame):
