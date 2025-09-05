@@ -10,7 +10,8 @@ import html
 import re
 import traceback
 from tkinter import (
-    Tk, filedialog, StringVar, Text, END, messagebox, Label, Frame, Scrollbar, VERTICAL, RIGHT, Y, HORIZONTAL, BOTTOM, X
+    Tk, filedialog, StringVar, Text, END, messagebox, Label, Frame, Scrollbar,
+    VERTICAL, RIGHT, Y, HORIZONTAL, BOTTOM, X, Spinbox, IntVar
 )
 from tkinter import ttk
 import tkinter.font as tkFont
@@ -80,7 +81,7 @@ def detect_format(filepath):
 def read_data(filepath, ftype):
     if ftype == "code":
         with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
+            content = f.readlines()
         return content
     if ftype == "csv":
         return pd.read_csv(filepath)
@@ -133,7 +134,7 @@ def read_data(filepath, ftype):
     if ftype == "txt" or ftype == "md":
         with open(filepath, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        return pd.DataFrame({"text": [l.strip() for l in lines if l.strip()]})
+        return lines
     raise ValueError(f"Неподдерживаемый формат: {ftype}")
 
 def save_data_saveas(df, out_path, out_fmt):
@@ -176,19 +177,20 @@ def save_data_saveas(df, out_path, out_fmt):
 
 def save_code(content, out_path):
     with open(out_path, "w", encoding="utf-8") as f:
-        f.write(content)
+        f.writelines(content)
 
 class DataConverterGUI:
     def __init__(self, master):
         self.master = master
         self.master.title("Универсальный конвертер данных")
-        self.master.geometry("900x700")
+        self.master.geometry("950x760")
         self.master.configure(bg=BG_MAIN)
         self.file_path = ""
         self.in_format = StringVar()
         self.out_format = StringVar()
         self.status = StringVar(value="Готов к работе.")
         self.df = None
+        self.n_preview = IntVar(value=20)
         self._build_gui()
 
     def _build_gui(self):
@@ -220,11 +222,22 @@ class DataConverterGUI:
         Label(self.master, textvariable=self.status, fg=TXT_ACCENT, font=label_font, anchor="w",
               padx=12, bg=BG_MAIN).pack(fill="x", pady=(0,7), padx=10)
 
+        # Предпросмотр
         preview_frame = Frame(self.master, bg=BG_MAIN)
         preview_frame.pack(fill="both", expand=True, padx=18, pady=(0,8))
-        Label(preview_frame, text="Результат / предпросмотр / ошибки:",
-              bg=BG_MAIN, font=label_font, anchor="w", fg=TXT_ACCENT).pack(fill="x", pady=(3,2))
-        self.text = Text(preview_frame, width=120, height=34, font=text_font,
+        preview_top = Frame(preview_frame, bg=BG_MAIN)
+        preview_top.pack(fill="x")
+        self.preview_label = Label(preview_top, text="Просмотр первых 20 строк:",
+                                   bg=BG_MAIN, font=label_font, anchor="w", fg=TXT_ACCENT)
+        self.preview_label.pack(side="left", pady=(3,2))
+        Label(preview_top, text=" Кол-во строк:", bg=BG_MAIN, fg=TXT_ACCENT, font=label_font).pack(side="left")
+        self.spin_preview = Spinbox(preview_top, from_=5, to=500, width=5, textvariable=self.n_preview,
+                                    bg=BG_ALT, fg=TXT_MAIN, font=label_font, relief="raised", command=self.update_preview)
+        self.spin_preview.pack(side="left", padx=(3,9), pady=(1,1))
+        self.spin_preview.bind("<Return>", lambda e: self.update_preview())
+        self.spin_preview.bind("<FocusOut>", lambda e: self.update_preview())
+
+        self.text = Text(preview_frame, width=125, height=35, font=text_font,
                          bg=BG_ALT, relief="ridge", borderwidth=2, fg=TXT_MAIN, insertbackground=TXT_MAIN)
         self.text.pack(side="left", fill="both", expand=True, padx=(0,4))
         yscroll = Scrollbar(preview_frame, orient=VERTICAL, command=self.text.yview, bg=BG_ALT, troughcolor=BG_MAIN)
@@ -233,6 +246,34 @@ class DataConverterGUI:
         xscroll = Scrollbar(preview_frame, orient=HORIZONTAL, command=self.text.xview, bg=BG_ALT, troughcolor=BG_MAIN)
         xscroll.pack(side=BOTTOM, fill=X)
         self.text.config(xscrollcommand=xscroll.set, wrap="none")
+
+    def update_preview(self):
+        self.text.delete(1.0, END)
+        n = self.n_preview.get()
+        try:
+            n = max(1, int(n))
+        except Exception:
+            n = 20
+            self.n_preview.set(n)
+        fmt = self.in_format.get()
+        label_str = f"Просмотр первых {n} строк:"
+        self.preview_label.config(text=label_str)
+        try:
+            if self.df is None:
+                return
+            if fmt == "code":
+                preview = "".join(self.df[:n])
+            elif isinstance(self.df, pd.DataFrame):
+                preview = self.df.head(n).to_markdown(index=False)
+            elif isinstance(self.df, list):
+                preview = "".join(self.df[:n])
+            elif isinstance(self.df, (dict,)):
+                preview = json.dumps(self.df, ensure_ascii=False, indent=3)
+            else:
+                preview = str(self.df)[:3000]
+            self.text.insert(END, label_str + "\n" + preview)
+        except Exception as e:
+            self.text.insert(END, f"Ошибка обновления предпросмотра: {e}\n\n{traceback.format_exc()}")
 
     def choose_file(self):
         path = filedialog.askopenfilename(title="Выберите файл", filetypes=[
@@ -252,20 +293,14 @@ class DataConverterGUI:
         else:
             self.format_combo["values"] = SUPPORTED_FORMATS
         self.out_format.set('')
-        self.text.delete(1.0, END)
         try:
             self.df = read_data(self.file_path, fmt)
-            if fmt == "code":
-                preview = self.df[:5000]
-            elif isinstance(self.df, pd.DataFrame):
-                preview = self.df.head(50).to_markdown(index=False)
-            elif isinstance(self.df, (dict, list)):
-                preview = json.dumps(self.df, ensure_ascii=False, indent=3)
-            else:
-                preview = str(self.df)[:2000]
-            self.text.insert(END, "Просмотр первых строк:\n" + preview)
         except Exception as e:
+            self.df = None
+            self.text.delete(1.0, END)
             self.text.insert(END, f"Ошибка чтения файла: {e}\n\n{traceback.format_exc()}")
+            return
+        self.update_preview()
 
     def convert(self):
         if not self.file_path or not self.in_format.get():
