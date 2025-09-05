@@ -16,6 +16,10 @@ from tkinter import ttk
 import tkinter.font as tkFont
 
 SUPPORTED_FORMATS = ["csv", "xlsx", "json", "xml", "yaml", "ini", "txt", "md"]
+SOURCE_EXTS = [
+    ".py", ".cpp", ".c", ".h", ".java", ".cs", ".js", ".ts", ".go", ".rb", ".swift",
+    ".sh", ".bat", ".pl", ".php", ".rs", ".scala", ".kt", ".dart"
+]
 
 BG_MAIN = "#232832"
 BG_SEC = "#2b3040"
@@ -27,16 +31,16 @@ BTN_FG = "#ffffff"
 BTN_HOVER = "#60bbff"
 
 def xml_safe_tag(tag):
-    # Преобразует любой текст в допустимый XML-тег
     tag = re.sub(r'[^a-zA-Z0-9_\.]', '_', str(tag).strip())
     return tag if re.match(r'^[a-zA-Z_]', tag) else f"f_{tag}"
 
 def xml_safe_text(val):
-    # Экранирует спецсимволы
     return html.escape(str(val), quote=True)
 
 def detect_format(filepath):
     ext = os.path.splitext(filepath)[-1].lower()
+    if ext in SOURCE_EXTS:
+        return "code"
     if ext == ".csv":
         return "csv"
     if ext == ".xlsx":
@@ -74,6 +78,10 @@ def detect_format(filepath):
     return "txt"
 
 def read_data(filepath, ftype):
+    if ftype == "code":
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        return content
     if ftype == "csv":
         return pd.read_csv(filepath)
     if ftype == "xlsx":
@@ -166,11 +174,15 @@ def save_data_saveas(df, out_path, out_fmt):
     else:
         raise ValueError("Формат не поддерживается!")
 
+def save_code(content, out_path):
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
 class DataConverterGUI:
     def __init__(self, master):
         self.master = master
         self.master.title("Универсальный конвертер данных")
-        self.master.geometry("850x680")
+        self.master.geometry("900x700")
         self.master.configure(bg=BG_MAIN)
         self.file_path = ""
         self.in_format = StringVar()
@@ -195,16 +207,16 @@ class DataConverterGUI:
               font=heading_font, bg=BG_MAIN, fg=TXT_ACCENT, anchor="w").pack(fill="x", pady=(16, 12))
         frm = Frame(self.master, bg=BG_SEC, pady=9, padx=14)
         frm.pack(fill="x", padx=19, pady=(0, 13))
-        btn_file = ttk.Button(frm, text="Выбрать файл", command=self.choose_file, style="Accent.TButton")
-        btn_file.grid(row=0, column=0, sticky="w", padx=(0,12), pady=4)
+        self.btn_file = ttk.Button(frm, text="Выбрать файл", command=self.choose_file, style="Accent.TButton")
+        self.btn_file.grid(row=0, column=0, sticky="w", padx=(0,12), pady=4)
         self.in_label = Label(frm, text="Исходный формат: не выбран", font=label_font, bg=BG_SEC, fg=TXT_ACCENT)
         self.in_label.grid(row=0, column=1, padx=8, pady=4, sticky="w")
         Label(frm, text="Конвертировать в:", font=label_font, bg=BG_SEC, fg=TXT_ACCENT).grid(row=1, column=0, pady=9, sticky="w")
         self.format_combo = ttk.Combobox(frm, values=SUPPORTED_FORMATS, textvariable=self.out_format,
                                          width=14, font=label_font, state="readonly")
         self.format_combo.grid(row=1, column=1, sticky="w", padx=8)
-        btn_convert = ttk.Button(frm, text="Конвертировать", command=self.convert, style="Accent.TButton")
-        btn_convert.grid(row=1, column=2, padx=(21,0), pady=4)
+        self.btn_convert = ttk.Button(frm, text="Конвертировать", command=self.convert, style="Accent.TButton")
+        self.btn_convert.grid(row=1, column=2, padx=(21,0), pady=4)
         Label(self.master, textvariable=self.status, fg=TXT_ACCENT, font=label_font, anchor="w",
               padx=12, bg=BG_MAIN).pack(fill="x", pady=(0,7), padx=10)
 
@@ -212,20 +224,19 @@ class DataConverterGUI:
         preview_frame.pack(fill="both", expand=True, padx=18, pady=(0,8))
         Label(preview_frame, text="Результат / предпросмотр / ошибки:",
               bg=BG_MAIN, font=label_font, anchor="w", fg=TXT_ACCENT).pack(fill="x", pady=(3,2))
-        self.text = Text(preview_frame, width=110, height=25, font=text_font,
+        self.text = Text(preview_frame, width=120, height=34, font=text_font,
                          bg=BG_ALT, relief="ridge", borderwidth=2, fg=TXT_MAIN, insertbackground=TXT_MAIN)
         self.text.pack(side="left", fill="both", expand=True, padx=(0,4))
         yscroll = Scrollbar(preview_frame, orient=VERTICAL, command=self.text.yview, bg=BG_ALT, troughcolor=BG_MAIN)
         yscroll.pack(side=RIGHT, fill=Y)
         self.text.config(yscrollcommand=yscroll.set)
-        # Добавим горизонтальный скролл для таблиц
         xscroll = Scrollbar(preview_frame, orient=HORIZONTAL, command=self.text.xview, bg=BG_ALT, troughcolor=BG_MAIN)
         xscroll.pack(side=BOTTOM, fill=X)
         self.text.config(xscrollcommand=xscroll.set, wrap="none")
 
     def choose_file(self):
         path = filedialog.askopenfilename(title="Выберите файл", filetypes=[
-            ("Все поддерживаемые", "*.csv *.xlsx *.json *.xml *.yaml *.yml *.ini *.txt *.md"),
+            ("Все поддерживаемые", "*.csv *.xlsx *.json *.xml *.yaml *.yml *.ini *.txt *.md *.py *.cpp *.c *.h *.java *.cs *.js *.ts *.go *.rb *.swift *.sh *.bat *.pl *.php *.rs *.scala *.kt *.dart"),
             ("Все файлы", "*.*")
         ])
         if not path:
@@ -235,12 +246,18 @@ class DataConverterGUI:
         self.in_format.set(fmt)
         self.in_label.config(text=f"Исходный формат: {fmt.upper()}")
         self.status.set(f"Выбран файл: {os.path.basename(path)} ({fmt})")
+        # Ограничить форматы назначения для исходных файлов только txt и md
+        if fmt == "code":
+            self.format_combo["values"] = ["txt", "md"]
+        else:
+            self.format_combo["values"] = SUPPORTED_FORMATS
         self.out_format.set('')
         self.text.delete(1.0, END)
         try:
             self.df = read_data(self.file_path, fmt)
-            if isinstance(self.df, pd.DataFrame):
-                # Более приятный предпросмотр с горизонт. скроллом
+            if fmt == "code":
+                preview = self.df[:5000]
+            elif isinstance(self.df, pd.DataFrame):
                 preview = self.df.head(50).to_markdown(index=False)
             elif isinstance(self.df, (dict, list)):
                 preview = json.dumps(self.df, ensure_ascii=False, indent=3)
@@ -255,7 +272,11 @@ class DataConverterGUI:
             messagebox.showerror("Ошибка", "Сначала выберите файл!")
             return
         target_fmt = self.out_format.get()
-        if not target_fmt or target_fmt not in SUPPORTED_FORMATS:
+        fmt = self.in_format.get()
+        if fmt == "code" and target_fmt not in ["txt", "md"]:
+            messagebox.showerror("Ошибка", "Исходный код можно сохранять только как .txt или .md!")
+            return
+        if not target_fmt or (target_fmt not in SUPPORTED_FORMATS and target_fmt not in ["txt", "md"]):
             messagebox.showerror("Ошибка", "Выберите корректный формат!")
             return
         save_path = filedialog.asksaveasfilename(
@@ -265,6 +286,11 @@ class DataConverterGUI:
         if not save_path:
             return
         try:
+            if fmt == "code":
+                save_code(self.df, save_path)
+                self.status.set(f"Исходник сохранён как {save_path}")
+                self.text.insert(END, f"\n\nСохранено в: {save_path}\n")
+                return
             if not isinstance(self.df, pd.DataFrame):
                 if isinstance(self.df, dict):
                     df = pd.DataFrame([self.df])
