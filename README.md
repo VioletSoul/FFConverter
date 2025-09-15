@@ -246,22 +246,9 @@ SUPPORTED_FORMATS.append("new_format")
 - **Modern dark theme** with improved UI/UX
 - **Modular architecture** with separated concerns
 
-### v1.x Legacy
-- Basic file conversion functionality
-- Simple Tkinter GUI
-- Limited error handling
-
 ## License
 
 MIT License. See LICENSE for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ## Support
 
